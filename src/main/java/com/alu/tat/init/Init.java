@@ -57,19 +57,24 @@ public class Init extends HttpServlet {
             UserService.createUser(admin);
         }
         if (allUsers.isEmpty()) {
-            User user = new User();
-            user.setLogin("imalolet");
-            user.setPasswordHash(PasswordTools.getPwdHash("imalolet"));
-            user.setName("Igor Maloletniy");
-            UserService.createUser(user);
+            User imalolet = createUser ("imalolet","imalolet","Igor Maloletniy");
+            createUser ("ibotian","ibotian","Igor Botian");
+            createUser ("mivanova","mivanova","Maya Ivanova");
+            createUser ("kkharlin","kkharlin","Konstantin Kharlin");
+            createUser ("jkubasov","jkubasov","Julia Vasilieva");
+            createUser ("mdmitrak","mdmitrak","Mikhail Dmitrakh");
+            createUser ("alexeyan","alexeyan","Alexey Antonov");
+            createUser ("valeryp","valeryp","Valery Pavlov");
+            createUser ("vkhodyre","vkhodyre","Vasily Khodyrev");
 
             Schema defaultSchema = new Schema();
             defaultSchema.setIsSystem(true);
             defaultSchema.setName("Detailed Analysis");
             defaultSchema.setDescription("Detailed analysis schema");
             List<SchemaElement> list = defaultSchema.getElementsList();
-            list.add(new SchemaElement("Documentation", "All documentation related aspects", SchemaElement.ElemType.DOMAIN, 0));
+            list.add(new SchemaElement("General", "General aspects", SchemaElement.ElemType.DOMAIN, 0));
             list.add(new SchemaElement("SDD", "FSD/FDD/SDD/Testplan needed?", SchemaElement.ElemType.BOOLEAN, 8));
+            list.add(new SchemaElement("Applicable otSolution", "Define the solution applicable (OTMS/OTBE/OTMC/...)", SchemaElement.ElemType.MULTI_ENUM,"OTMS;OTBE;OTMC", 0));
 
             list.add(new SchemaElement("Models", "All model description related aspects", SchemaElement.ElemType.DOMAIN, 0));
             list.add(new SchemaElement("New models", "Do we need to create new models?", SchemaElement.ElemType.BOOLEAN, 4));
@@ -88,7 +93,6 @@ public class Init extends HttpServlet {
             list.add(new SchemaElement("Enhancer / CoherenceChecker / Post-pre actions", "Does the new Business logic affects pointed items?", SchemaElement.ElemType.BOOLEAN, 4));
             list.add(new SchemaElement("New or changed behavior?", "Do we need to introduc/change any business logic?", SchemaElement.ElemType.BOOLEAN, 4));
             list.add(new SchemaElement("New/changed alarams", "Do we need to create/update alarms?", SchemaElement.ElemType.BOOLEAN, 2));
-            list.add(new SchemaElement("Applicable otSolution", "Define the solution applicable (OTMS/OTBE/OTMC/...)", SchemaElement.ElemType.MULTI_ENUM,"OTMS;OTBE;OTMC", 0));
             list.add(new SchemaElement("Describe cases", "Set and describe the number of use cases/scenarios", SchemaElement.ElemType.MULTI_STRING, 4));
 
             list.add(new SchemaElement("EasyAdmin / Migration / Audit", "All easy admin/migration/audit aspects", SchemaElement.ElemType.DOMAIN, 0));
@@ -136,11 +140,10 @@ public class Init extends HttpServlet {
             FolderService.createFolder(f1);
             FolderService.createFolder(f2);
 
-            for (int i = 0; i < 10; i++) {
+            for (int i = 0; i < 5; i++) {
                 Task t = new Task();
-                t.setIsSystem(true);
                 t.setId(System.currentTimeMillis());
-                t.setAuthor(user);
+                t.setAuthor(imalolet);
                 t.setDescription("description of crqms" + i);
                 t.setName("crqms" + i);
                 t.setSchema(defaultSchema);
@@ -150,5 +153,14 @@ public class Init extends HttpServlet {
             }
         }
 
+    }
+
+    private static User createUser(String login, String pwd, String fullName) {
+        User user = new User();
+        user.setLogin(login);
+        user.setPasswordHash(PasswordTools.getPwdHash(pwd));
+        user.setName(fullName);
+        UserService.createUser(user);
+        return user;
     }
 }

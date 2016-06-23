@@ -1,20 +1,38 @@
 package com.alu.tat.component;
 
+import com.alu.tat.entity.schema.SchemaElement;
 import com.vaadin.data.util.converter.Converter;
+import com.vaadin.data.validator.IntegerRangeValidator;
 import com.vaadin.server.FontAwesome;
 import com.vaadin.ui.*;
 
-import javax.xml.soap.Text;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Created by imalolet on 17.05.2016.
  */
-public class MultiStringComponent extends CustomField<List<String>> {
+public class MultiStringComponent extends CustomField<MultiStringBean> {
 
     private VerticalLayout main;
+    private TextField multi;
     private String header;
+
+    private SchemaElement element;
+
+    /**
+     * Constructor needed for testing purposes only.
+     */
+    public MultiStringComponent() {
+        element = new SchemaElement("test_ms", "test_desc", SchemaElement.ElemType.MULTI_STRING, 0);
+    }
+
+    public MultiStringComponent(SchemaElement element) {
+        this.header = element.getName();
+        this.element = element;
+    }
 
     @Override
     public Class getType() {
@@ -34,27 +52,30 @@ public class MultiStringComponent extends CustomField<List<String>> {
 
 
     @Override
-    public List<String> getValue() {
-        List<String> value = new ArrayList();
+    public MultiStringBean getValue() {
+        LinkedHashMap<String, Integer> value = new LinkedHashMap();
+        Integer m = Integer.parseInt(multi.getValue());
         //skip separator and label
         for (int i = 2; i < main.getComponentCount(); i++) {
             String v = getFieldValue(main.getComponent(i));
             if (v != null) {
-                value.add(v);
+                value.put(v, m);
             }
         }
-        return value;
+
+        return new MultiStringBean(m, value);
     }
 
     @Override
-    public void setValue(List<String> value) throws ReadOnlyException, Converter.ConversionException {
+    public void setValue(MultiStringBean bean) throws ReadOnlyException, Converter.ConversionException {
         main.removeAllComponents();
 
         baseInit();
+        LinkedHashMap<String, Integer> value = bean.getValues();
 
         if (value != null && !value.isEmpty()) {
-            for (String v : value) {
-                main.addComponent(addField(v));
+            for (Map.Entry<String, Integer> v : value.entrySet()) {
+                main.addComponent(addField(v.getKey()));
             }
         } else {
             main.addComponent(addField(""));
@@ -62,12 +83,25 @@ public class MultiStringComponent extends CustomField<List<String>> {
     }
 
     private void baseInit() {
-        main.addComponent(new Label(this.getHeader()));
-        main.addComponent(new Separator(20));
+        HorizontalLayout hl = new HorizontalLayout();
+        Label label = new Label(header);
+        hl.addComponent(label);
+        multi = new TextField();
+        multi.setValue(element.getMultiplier().toString());
+        multi.setConverter(Integer.class);
+        multi.addValidator(new IntegerRangeValidator("Estimate should be between 1 and 80", 1, 80));
+        multi.setWidth(3f, Unit.EM);
+        hl.addComponent(new HSeparator(20));
+        hl.addComponent(multi);
+        hl.setComponentAlignment(label, Alignment.MIDDLE_LEFT);
+        hl.setComponentAlignment(multi, Alignment.MIDDLE_LEFT);
+        main.addComponent(hl);
+        main.addComponent(new VSeparator(20));
     }
 
     private GridLayout addField(String value) {
         final TextArea text = new TextArea("", value);
+        text.setWordwrap(false);
         text.setCaption("Case description");
         text.setWidth("600px");
 
@@ -78,7 +112,7 @@ public class MultiStringComponent extends CustomField<List<String>> {
         buttonLayout.setSpacing(true);
         buttonLayout.setDefaultComponentAlignment(Alignment.TOP_LEFT);
 
-        final GridLayout gridLayout = new GridLayout(1, 4, text, new Separator(20), buttonLayout, new Separator(50));
+        final GridLayout gridLayout = new GridLayout(1, 4, text, new VSeparator(20), buttonLayout, new VSeparator(50));
 
         addBtn.addClickListener(new Button.ClickListener() {
             @Override
@@ -105,12 +139,4 @@ public class MultiStringComponent extends CustomField<List<String>> {
         return text.getValue();
     }
 
-
-    public String getHeader() {
-        return header;
-    }
-
-    public void setHeader(String heading) {
-        this.header = heading;
-    }
 }

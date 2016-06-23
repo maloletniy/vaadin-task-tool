@@ -1,6 +1,6 @@
 package com.alu.tat.view;
 
-import com.alu.tat.component.MultiStringComponent;
+import com.alu.tat.component.TaskComponentFactory;
 import com.alu.tat.entity.Folder;
 import com.alu.tat.entity.Task;
 import com.alu.tat.entity.User;
@@ -12,13 +12,15 @@ import com.alu.tat.service.TaskService;
 import com.alu.tat.util.TaskPresenter;
 import com.alu.tat.util.UIComponentFactory;
 import com.vaadin.data.Property;
+import com.vaadin.data.validator.StringLengthValidator;
 import com.vaadin.navigator.Navigator;
 import com.vaadin.navigator.ViewChangeListener;
 import com.vaadin.server.FontAwesome;
-import com.vaadin.server.ThemeResource;
 import com.vaadin.ui.*;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Created by imalolet on 6/10/2015.
@@ -40,11 +42,17 @@ public class TaskView extends AbstractActionView {
         final HorizontalSplitPanel hsplit = new HorizontalSplitPanel();
         //Left section begin
         FormLayout form = new FormLayout();
-        final TextField taskName = new TextField("Task Name");
+        final TextArea taskName = new TextArea("Task Name");
+        taskName.setWidth("100%");
+        taskName.setHeight("60px");
+        taskName.addValidator(new StringLengthValidator(
+                "Task name must not be empty", 1, 255, false));
         final TextField taskAuth = new TextField("Author");
         taskAuth.setValue(((User) getSession().getAttribute("user")).getName());
         taskAuth.setEnabled(false);
-        final TextField taskDesc = new TextField("Description");
+        final TextArea taskDesc = new TextArea("Description");
+        taskDesc.setWidth("100%");
+        taskDesc.setWordwrap(false);
         final ComboBox taskRel = new ComboBox("Folder");
         taskRel.addItems(FolderService.getFolders());
         taskRel.setNullSelectionAllowed(false);
@@ -84,13 +92,19 @@ public class TaskView extends AbstractActionView {
         create.addClickListener(new Button.ClickListener() {
             @Override
             public void buttonClick(Button.ClickEvent event) {
+                if (!isDataValid(fieldMap)) return;
+
                 Task t;
                 if (isCreate) {
                     t = new Task();
                 } else {
                     t = taskService.getTask(updateId);
                 }
-                t.setName(taskName.getValue());
+                if (taskName.isValid()) {
+                    t.setName(taskName.getValue());
+                } else {
+                    return;
+                }
                 t.setAuthor((User) getSession().getAttribute("user"));
                 t.setDescription(taskDesc.getValue());
                 if (taskRel.getValue() instanceof Folder) {
@@ -141,21 +155,25 @@ public class TaskView extends AbstractActionView {
         });
     }
 
+    private boolean isDataValid(Map<String, Property> fieldMap) {
+        for (Map.Entry<String, Property> entry : fieldMap.entrySet()) {
+            if (entry.getValue() instanceof AbstractField) {
+                AbstractField af = (AbstractField) entry.getValue();
+                if (!af.isValid()) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     private void initSchemaData(final Map<String, Property> fieldMap, String jsonData, Schema schema) {
         Map<String, Object> valueMap = TaskPresenter.convertFromJSON(jsonData, schema);
         for (String fieldName : fieldMap.keySet()) {
             Property field = fieldMap.get(fieldName);
             Object vo = valueMap.get(fieldName);
             if (vo != null) {
-                if (field instanceof ListSelect) {
-                    ListSelect sl = (ListSelect) field;
-                    LinkedList<String> ll = (LinkedList<String>) vo;
-                    for (String v : ll) {
-                        sl.select(v);
-                    }
-                } else {
-                    field.setValue(vo);
-                }
+                field.setValue(vo);
             }
         }
     }
@@ -163,49 +181,12 @@ public class TaskView extends AbstractActionView {
     private TabSheet prepareTabDataView(Map<String, Property> fieldMap, Schema curSchema) {
         TabSheet ts = new TabSheet();
         FormLayout curForm = new FormLayout();
+        curForm.setWidth("100%");
         String tabName = "General";
 
         for (SchemaElement se : curSchema.getElementsList()) {
             final AbstractField c;
             switch (se.getType()) {
-                case BOOLEAN: {
-                    c = new CheckBox(se.getName());
-                    curForm.addComponent(c);
-                    fieldMap.put(se.getName(), c);
-                    break;
-                }
-                case MULTI_ENUM: {
-                    ListSelect cb = new ListSelect(se.getName());
-                    cb.setMultiSelect(true);
-                    String data = se.getData();
-                    String[] options = data.split(";");
-                    cb.setRows(options.length);
-                    cb.addItems(options);
-                    c = cb;
-                    curForm.addComponent(c);
-                    fieldMap.put(se.getName(), c);
-                    break;
-                }
-                case MULTI_STRING: {
-                    c = new MultiStringComponent();
-                    ((MultiStringComponent) c).setHeader(se.getName());
-                    curForm.addComponent(c);
-                    fieldMap.put(se.getName(), c);
-                    break;
-                }
-                case INTEGER: {
-                    c = new TextField(se.getName());
-                    c.setConverter(Integer.class);
-                    curForm.addComponent(c);
-                    fieldMap.put(se.getName(), c);
-                    break;
-                }
-                case STRING: {
-                    c = new TextField(se.getName());
-                    curForm.addComponent(c);
-                    fieldMap.put(se.getName(), c);
-                    break;
-                }
                 case DOMAIN: {
                     if (curForm.getComponentCount() > 0) {
                         ts.addTab(curForm, tabName);
@@ -215,13 +196,12 @@ public class TaskView extends AbstractActionView {
                     continue;
                 }
                 default: {
-                    c = new TextField();
+                    c = TaskComponentFactory.getField(se);
                     curForm.addComponent(c);
                     fieldMap.put(se.getName(), c);
                     break;
                 }
             }
-            c.setDescription(se.getDescription());
         }
         if (curForm.getComponentCount() > 0) {
             ts.addTab(curForm, tabName);
