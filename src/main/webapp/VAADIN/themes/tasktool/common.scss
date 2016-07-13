@@ -6,21 +6,16 @@
 
 @mixin tasktool-common {
 
-  .valo-menu {
-    border-right: none;
+  .v-splitpanel-first-container {
 
-    .badgewrapper {
-      position: relative;
-      padding: 0 !important;
-    }
-
-    .v-ddwrapper {
-      display: block;
-    }
   }
 
-  .valo-menu-item {
-    overflow: hidden;
+  .v-splitpanel-hsplitter {
+
+  }
+
+  .v-splitpanel-second-container {
+
   }
 
 }

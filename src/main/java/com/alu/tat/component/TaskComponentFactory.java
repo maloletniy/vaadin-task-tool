@@ -2,7 +2,6 @@ package com.alu.tat.component;
 
 import com.alu.tat.entity.schema.SchemaElement;
 import com.vaadin.ui.AbstractField;
-import com.vaadin.ui.ListSelect;
 import com.vaadin.ui.TextArea;
 import com.vaadin.ui.TextField;
 
@@ -20,14 +19,9 @@ public class TaskComponentFactory {
                 c = new BooleanItemComponent(se);
                 break;
             }
+            case ENUM:
             case MULTI_ENUM: {
-                ListSelect cb = new ListSelect(se.getName());
-                cb.setMultiSelect(true);
-                String data = se.getData();
-                String[] options = data.split(";");
-                cb.setRows(options.length);
-                cb.addItems(options);
-                c = cb;
+                c = new MultiEnumComponent(se);
                 break;
             }
             case MULTI_STRING: {
@@ -43,15 +37,13 @@ public class TaskComponentFactory {
                 c = new TextArea(se.getName());
                 break;
             }
-            case DOMAIN: {
-                return null;
-            }
             default: {
                 c = new TextField();
                 break;
             }
         }
         c.setDescription(se.getDescription());
+        c.setId(se.getName());
         return c;
     }
 }

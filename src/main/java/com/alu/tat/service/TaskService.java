@@ -16,15 +16,6 @@ import com.alu.tat.entity.schema.Schema;
  */
 public class TaskService {
 
-    private static TaskService instance = new TaskService();
-
-    public static TaskService getInstance() {
-        return instance;
-    }
-
-    private TaskService() {
-    }
-
     public static Collection<Task> getTasks() {
         return BaseDao.getAll(Task.class);
     }
@@ -61,5 +52,10 @@ public class TaskService {
         Map<String, Object> params = new HashMap<>();
         params.put("user", user);
         return BaseDao.find(Task.class, "findTaskByUser", params);
+    }
+
+    public static List<Task> findTasksWOStatus() {
+        Map<String, Object> params = new HashMap<>();
+        return BaseDao.find(Task.class, "findTasksWOStatus", params);
     }
 }

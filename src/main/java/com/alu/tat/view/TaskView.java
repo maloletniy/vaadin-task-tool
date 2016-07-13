@@ -1,5 +1,6 @@
 package com.alu.tat.view;
 
+import com.alu.tat.component.HSeparator;
 import com.alu.tat.component.TaskComponentFactory;
 import com.alu.tat.entity.Folder;
 import com.alu.tat.entity.Task;
@@ -9,6 +10,7 @@ import com.alu.tat.entity.schema.SchemaElement;
 import com.alu.tat.service.FolderService;
 import com.alu.tat.service.SchemaService;
 import com.alu.tat.service.TaskService;
+import com.alu.tat.util.SessionHelper;
 import com.alu.tat.util.TaskPresenter;
 import com.alu.tat.util.UIComponentFactory;
 import com.vaadin.data.Property;
@@ -17,10 +19,11 @@ import com.vaadin.navigator.Navigator;
 import com.vaadin.navigator.ViewChangeListener;
 import com.vaadin.server.FontAwesome;
 import com.vaadin.ui.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.vaadin.dialogs.ConfirmDialog;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Created by imalolet on 6/10/2015.
@@ -28,9 +31,10 @@ import java.util.Map;
  */
 public class TaskView extends AbstractActionView {
 
+    private final static Logger logger =
+            LoggerFactory.getLogger(TaskView.class);
+
     private Navigator navigator;
-    private TaskService taskService = TaskService.getInstance();
-    private SchemaService schemaService = SchemaService.getInstance();
 
     @Override
     public void enter(ViewChangeListener.ViewChangeEvent event) {
@@ -42,63 +46,89 @@ public class TaskView extends AbstractActionView {
         final HorizontalSplitPanel hsplit = new HorizontalSplitPanel();
         //Left section begin
         FormLayout form = new FormLayout();
+        form.setMargin(true);
+        form.setSpacing(true);
+
         final TextArea taskName = new TextArea("Task Name");
         taskName.setWidth("100%");
         taskName.setHeight("60px");
         taskName.addValidator(new StringLengthValidator(
                 "Task name must not be empty", 1, 255, false));
+        taskName.setWordwrap(true);
         final TextField taskAuth = new TextField("Author");
-        taskAuth.setValue(((User) getSession().getAttribute("user")).getName());
+        taskAuth.setValue(SessionHelper.getCurrentUser(getSession()).getName());
         taskAuth.setEnabled(false);
         final TextArea taskDesc = new TextArea("Description");
         taskDesc.setWidth("100%");
-        taskDesc.setWordwrap(false);
+        taskDesc.setWordwrap(true);
         final ComboBox taskRel = new ComboBox("Folder");
         taskRel.addItems(FolderService.getFolders());
         taskRel.setNullSelectionAllowed(false);
-
-        Collection<Schema> schemas = schemaService.getSchemas();
+        Collection<Schema> schemas = Collections.EMPTY_LIST;
+        if (isCreate) {
+            schemas = SchemaService.getNotDeprecatedSchemas();
+        } else {
+            schemas = SchemaService.getSchemas();
+        }
         final ComboBox taskSchema = new ComboBox("Schema", schemas);
-        Schema defaultSchema = schemas.iterator().next();
+        Schema defaultSchema = SchemaService.getDefaultSchema();
+        if (defaultSchema == null) {
+            defaultSchema = schemas.iterator().next();
+        }
         taskSchema.setValue(defaultSchema);
         taskSchema.setNullSelectionAllowed(false);
+
+        final ComboBox taskStatus = new ComboBox("Status", Arrays.asList(Task.Status.values()));
+        taskStatus.setNullSelectionAllowed(false);
+        taskStatus.setValue(Task.Status.NEW);
+        taskStatus.setEnabled(false);
 
         form.addComponent(taskName);
         form.addComponent(taskAuth);
         form.addComponent(taskDesc);
         form.addComponent(taskRel);
         form.addComponent(taskSchema);
+        form.addComponent(taskStatus);
 
-        Button create = UIComponentFactory.getButton(isCreate ? "Create" : "Update", "TASKVIEW_CREATEORUPDATE_BUTTON", FontAwesome.PLUS);
-        Button back = UIComponentFactory.getButton("Back", "TASKVIEW_CANCEL_BUTTON", FontAwesome.ARROW_LEFT);
+        Button createButton = UIComponentFactory.getButton(isCreate ? "Create" : "Update", "TASKVIEW_CREATEORUPDATE_BUTTON", FontAwesome.PLUS);
+        Button cancelButton = UIComponentFactory.getButton("Back", "TASKVIEW_CANCEL_BUTTON", FontAwesome.ARROW_LEFT);
 
-        HorizontalLayout buttonGroup = new HorizontalLayout(create, back);
+        HorizontalLayout buttonGroup = new HorizontalLayout(createButton, new HSeparator(20), cancelButton);
         form.addComponent(buttonGroup);
         hsplit.setFirstComponent(form);
         //Left section end
 
         //Right section begin
-        Schema curSchema = !isCreate ? taskService.getTask(updateId).getSchema() : (Schema) taskSchema.getValue();
+        Schema curSchema = !isCreate ? TaskService.getTask(updateId).getSchema() : (Schema) taskSchema.getValue();
         final Map<String, Property> fieldMap = new HashMap<>();
         TabSheet ts = prepareTabDataView(fieldMap, curSchema);
-        hsplit.setSecondComponent(ts);
+        ts.setSizeUndefined();
+        VerticalLayout vl = new VerticalLayout();
+        vl.setSpacing(true);
+        vl.setMargin(true);
+        vl.addComponent(ts);
+        Panel panel = new Panel();
+
+        panel.setSizeFull();
+        panel.setContent(vl);
+        hsplit.setSecondComponent(panel);
         //Right section end
 
         // Set the position of the splitter as percentage
         hsplit.setSplitPosition(25, Unit.PERCENTAGE);
         hsplit.setSizeFull();
         addComponent(hsplit);
+        this.setSizeFull();
 
-        create.addClickListener(new Button.ClickListener() {
+        createButton.addClickListener(new Button.ClickListener() {
             @Override
             public void buttonClick(Button.ClickEvent event) {
                 if (!isDataValid(fieldMap)) return;
-
                 Task t;
                 if (isCreate) {
                     t = new Task();
                 } else {
-                    t = taskService.getTask(updateId);
+                    t = TaskService.getTask(updateId);
                 }
                 if (taskName.isValid()) {
                     t.setName(taskName.getValue());
@@ -111,11 +141,16 @@ public class TaskView extends AbstractActionView {
                     t.setFolder((Folder) taskRel.getValue());
                 }
                 t.setSchema((Schema) taskSchema.getValue());
+                t.setStatus((Task.Status) taskStatus.getValue());
                 t.setData(TaskPresenter.convertToData((Schema) taskSchema.getValue(), fieldMap));
                 if (!isCreate) {
-                    taskService.updateTask(t);
+                    TaskService.updateTask(t);
+                    SessionHelper.notifyAllUsers("Task '" + t.getName() + "' is updated");
+                    logger.debug("User " + SessionHelper.getCurrentUser(getSession()) + " updated task '" + t.getName() + "'");
                 } else {
-                    taskService.addTask(t);
+                    TaskService.addTask(t);
+                    SessionHelper.notifyAllUsers("Task '" + t.getName() + "' is created.");
+                    logger.debug("User " + SessionHelper.getCurrentUser(getSession()) + " created task '" + t.getName() + "'");
                 }
 
                 navigator.navigateTo(UIConstants.VIEW_MAIN);
@@ -123,22 +158,45 @@ public class TaskView extends AbstractActionView {
             }
         });
 
-        back.addClickListener(new Button.ClickListener() {
+        cancelButton.addClickListener(new Button.ClickListener() {
             @Override
             public void buttonClick(Button.ClickEvent event) {
-                navigator.navigateTo(UIConstants.VIEW_MAIN);
+                if (isDataModified(fieldMap)) {
+                    ConfirmDialog.show(getUI(), "All changes will be lost. Are you sure?", new ConfirmDialog.Listener() {
+                        @Override
+                        public void onClose(ConfirmDialog confirmDialog) {
+                            if (confirmDialog.isConfirmed()) {
+                                navigator.navigateTo(UIConstants.VIEW_MAIN);
+                            }
+                        }
+                    });
+                } else {
+                    navigator.navigateTo(UIConstants.VIEW_MAIN);
+                }
             }
         });
 
         //load task fields if its for edit
         if (!isCreate) {
-            Task task = taskService.getTask(updateId);
+            Task task = TaskService.getTask(updateId);
             taskName.setValue(String.valueOf(task.getName()));
             taskAuth.setValue(task.getAuthor().getName());
             taskDesc.setValue(task.getDescription());
             taskRel.setValue(task.getFolder());
+            taskStatus.setValue(task.getStatus());
+            taskStatus.setEnabled(true);
             taskSchema.setValue(task.getSchema());
-            initSchemaData(fieldMap, task.getData(), (Schema) taskSchema.getValue());
+            taskSchema.setEnabled(false);
+            boolean isFinished = Task.Status.DONE.equals(task.getStatus());
+            if (isFinished) {
+                taskName.setEnabled(false);
+                taskRel.setEnabled(false);
+                if (!SessionHelper.getCurrentUser(getSession()).getIsSystem()) {
+                    taskStatus.setEnabled(false);
+                    createButton.setEnabled(false);
+                }
+            }
+            initSchemaData(fieldMap, task.getData(), (Schema) taskSchema.getValue(), isFinished);
         }
 
         taskSchema.addValueChangeListener(new Property.ValueChangeListener() {
@@ -148,8 +206,8 @@ public class TaskView extends AbstractActionView {
                 TabSheet ts = prepareTabDataView(fieldMap, newSchema);
                 hsplit.setSecondComponent(ts);
                 if (!isCreate) {
-                    Task task = taskService.getTask(updateId);
-                    initSchemaData(fieldMap, task.getData(), newSchema);
+                    Task task = TaskService.getTask(updateId);
+                    initSchemaData(fieldMap, task.getData(), newSchema, Task.Status.DONE.equals(task.getStatus()));
                 }
             }
         });
@@ -167,7 +225,19 @@ public class TaskView extends AbstractActionView {
         return true;
     }
 
-    private void initSchemaData(final Map<String, Property> fieldMap, String jsonData, Schema schema) {
+    private boolean isDataModified(Map<String, Property> fieldMap) {
+        for (Map.Entry<String, Property> entry : fieldMap.entrySet()) {
+            if (entry.getValue() instanceof AbstractField) {
+                AbstractField af = (AbstractField) entry.getValue();
+                if (af.isModified()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void initSchemaData(final Map<String, Property> fieldMap, String jsonData, Schema schema, boolean isReadonly) {
         Map<String, Object> valueMap = TaskPresenter.convertFromJSON(jsonData, schema);
         for (String fieldName : fieldMap.keySet()) {
             Property field = fieldMap.get(fieldName);
@@ -175,13 +245,16 @@ public class TaskView extends AbstractActionView {
             if (vo != null) {
                 field.setValue(vo);
             }
+            if (isReadonly) {
+                field.setReadOnly(isReadonly);
+            }
         }
     }
 
     private TabSheet prepareTabDataView(Map<String, Property> fieldMap, Schema curSchema) {
         TabSheet ts = new TabSheet();
         FormLayout curForm = new FormLayout();
-        curForm.setWidth("100%");
+        curForm.setSizeFull();
         String tabName = "General";
 
         for (SchemaElement se : curSchema.getElementsList()) {
@@ -189,6 +262,7 @@ public class TaskView extends AbstractActionView {
             switch (se.getType()) {
                 case DOMAIN: {
                     if (curForm.getComponentCount() > 0) {
+                        curForm.setSizeFull();
                         ts.addTab(curForm, tabName);
                     }
                     curForm = new FormLayout();

@@ -18,6 +18,8 @@ public class BooleanItemComponent extends CustomField<BooleanItemBean> {
     private TextField multi;
     private TextArea comment;
 
+    private BooleanItemBean originalState;
+
     private SchemaElement element;
 
     /**
@@ -33,13 +35,20 @@ public class BooleanItemComponent extends CustomField<BooleanItemBean> {
 
     @Override
     protected Component initContent() {
-        main = new GridLayout(3, 1);
-        main.setColumnExpandRatio(1, 4);
-        main.setColumnExpandRatio(2, 1);
-        main.setColumnExpandRatio(3, 4);
+        main = new GridLayout(4, 1);
+        //main.setStyleName("tasktool");
+        main.setSpacing(true);
+        //main.setColumnExpandRatio(0, 0.2f);
+        main.setColumnExpandRatio(1, 0.1f);
+        main.setColumnExpandRatio(2, 0.1f);
+        main.setColumnExpandRatio(3, 0.6f);
         main.setWidth("100%");
-        value = new CheckBox(element.getName());
+        Label cLabel = new Label(element.getName());
+        cLabel.setSizeUndefined();//VAADIN hack for labels inside GridLayout
+
+        value = new CheckBox();
         multi = new TextField();
+        multi.setDescription("Estimate");
         //Label caption = new com.vaadin.ui.Label(header);
         multi.setValue(element.getMultiplier().toString());
         multi.setConverter(Integer.class);
@@ -47,33 +56,42 @@ public class BooleanItemComponent extends CustomField<BooleanItemBean> {
         multi.setWidth(3f, Unit.EM);
         multi.setEnabled(false);
         comment = new TextArea();
+        comment.addStyleName("v-textarea-normal");
         comment.setWidth("600px");
-        comment.setWordwrap(false);
+        comment.setRows(calcRowNum(""));
+        comment.setWordwrap(true);
         comment.setEnabled(false);
+        comment.setHeightUndefined();
         value.addValueChangeListener(new ValueChangeListener() {
             @Override
             public void valueChange(Property.ValueChangeEvent event) {
                 if ((Boolean) event.getProperty().getValue()) {
-                    multi.setEnabled(true);
+                    if (element.getMultiplier() > 0) {
+                        multi.setEnabled(true);
+                    }
+                    comment.setRows(calcRowNum(comment.getValue()));
                     comment.setEnabled(true);
                 } else {
                     multi.setValue(element.getMultiplier().toString());
                     multi.setEnabled(false);
-                    comment.setValue("");
+                    comment.setRows(calcRowNum(""));
                     comment.setEnabled(false);
                 }
             }
         });
-
+        main.addComponent(cLabel);
         main.addComponent(value);
         //main.addComponent(new HSeparator(20));
         main.addComponent(multi);
         //main.addComponent(new HSeparator(20));
         main.addComponent(comment);
+        main.setComponentAlignment(cLabel, Alignment.MIDDLE_CENTER);
         main.setComponentAlignment(value, Alignment.MIDDLE_CENTER);
         main.setComponentAlignment(multi, Alignment.MIDDLE_CENTER);
         main.setComponentAlignment(comment, Alignment.MIDDLE_CENTER);
         main.setImmediate(true);
+
+        storeOriginalState();
         return main;
     }
 
@@ -90,6 +108,15 @@ public class BooleanItemComponent extends CustomField<BooleanItemBean> {
         value.setValue(b);
         multi.setValue(i.toString());
         comment.setValue(c);
+        comment.setRows(calcRowNum(c));
+
+        storeOriginalState();
+    }
+
+    private int calcRowNum(String s) {
+        String cut = s.replace("\n", "");
+        int k = s.length() - cut.length() + 3;
+        return k;
     }
 
     @Override
@@ -103,7 +130,32 @@ public class BooleanItemComponent extends CustomField<BooleanItemBean> {
     @Override
     public void validate() throws Validator.InvalidValueException {
         super.validate();
-        value.validate();
-        multi.validate();
+        if (value != null) {
+            value.validate();
+        }
+        if (multi != null) {
+            multi.validate();
+        }
+    }
+
+    private void storeOriginalState() {
+        originalState = getValue();
+    }
+
+    private boolean isStateChanged() {
+        return originalState != null && !originalState.equals(getValue());
+    }
+
+    @Override
+    public boolean isModified() {
+        return super.isModified() || isStateChanged();
+    }
+
+    @Override
+    public void setReadOnly(boolean readOnly) {
+        super.setReadOnly(readOnly);
+        value.setEnabled(!readOnly);
+        multi.setEnabled(!readOnly);
+        comment.setEnabled(!readOnly);
     }
 }

@@ -7,9 +7,13 @@ import com.alu.tat.entity.dao.BaseDao;
 import com.alu.tat.entity.schema.Schema;
 import com.alu.tat.entity.schema.SchemaElement;
 import com.alu.tat.service.FolderService;
+import com.alu.tat.service.SchemaService;
+import com.alu.tat.service.TaskService;
 import com.alu.tat.service.UserService;
 import com.alu.tat.util.HibernateUtil;
 import com.alu.tat.util.PasswordTools;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -21,16 +25,19 @@ import java.util.List;
  */
 public class Init extends HttpServlet {
 
-    //private final static Logger logger =
-    //        LoggerFactory.getLogger(Init.class);
+    private final static Logger logger =
+            LoggerFactory.getLogger(Init.class);
 
     @Override
     public void init() throws ServletException {
         super.init();
         try {
+            logger.debug("Preparing initial DB data...");
             initData();
+            logger.debug("Checking if migration needed...");
+            migrateDataIfNeeded();
         } catch (Exception e) {
-            System.err.println("error while initializing data: " +  e.getMessage());
+            logger.error("error while initializing data: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -39,9 +46,10 @@ public class Init extends HttpServlet {
     public void destroy() {
         super.destroy();
         try {
+            logger.debug("Shutting down Hibernate...");
             HibernateUtil.shutdown();
         } catch (Exception e) {
-            System.err.println("error while shutting down hibernate: " +  e.getMessage());
+            logger.error("error while shutting down hibernate: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -54,27 +62,31 @@ public class Init extends HttpServlet {
         admin.setPasswordHash(PasswordTools.getPwdHash("admin"));
         admin.setIsSystem(true);
         if (!allUsers.contains(admin)) {
+            logger.debug("Creating default admin...");
             UserService.createUser(admin);
         }
         if (allUsers.isEmpty()) {
-            User imalolet = createUser ("imalolet","imalolet","Igor Maloletniy");
-            createUser ("ibotian","ibotian","Igor Botian");
-            createUser ("mivanova","mivanova","Maya Ivanova");
-            createUser ("kkharlin","kkharlin","Konstantin Kharlin");
-            createUser ("jkubasov","jkubasov","Julia Vasilieva");
-            createUser ("mdmitrak","mdmitrak","Mikhail Dmitrakh");
-            createUser ("alexeyan","alexeyan","Alexey Antonov");
-            createUser ("valeryp","valeryp","Valery Pavlov");
-            createUser ("vkhodyre","vkhodyre","Vasily Khodyrev");
+            logger.debug("Creating users set...");
+            User imalolet = createUser("imalolet", "imalolet", "Igor Maloletniy");
+            createUser("ibotian", "ibotian", "Igor Botian");
+            createUser("mivanova", "mivanova", "Maya Ivanova");
+            createUser("kkharlin", "kkharlin", "Konstantin Kharlin");
+            createUser("jkubasov", "jkubasov", "Julia Vasilieva");
+            createUser("mdmitrak", "mdmitrak", "Mikhail Dmitrakh");
+            createUser("alexeyan", "alexeyan", "Alexey Antonov");
+            createUser("valeryp", "valeryp", "Valery Pavlov");
+            createUser("vkhodyre", "vkhodyre", "Vasily Khodyrev");
 
+            logger.debug("Creating default schemas...");
             Schema defaultSchema = new Schema();
             defaultSchema.setIsSystem(true);
+            defaultSchema.setIsdefault(true);
             defaultSchema.setName("Detailed Analysis");
             defaultSchema.setDescription("Detailed analysis schema");
             List<SchemaElement> list = defaultSchema.getElementsList();
             list.add(new SchemaElement("General", "General aspects", SchemaElement.ElemType.DOMAIN, 0));
             list.add(new SchemaElement("SDD", "FSD/FDD/SDD/Testplan needed?", SchemaElement.ElemType.BOOLEAN, 8));
-            list.add(new SchemaElement("Applicable otSolution", "Define the solution applicable (OTMS/OTBE/OTMC/...)", SchemaElement.ElemType.MULTI_ENUM,"OTMS;OTBE;OTMC", 0));
+            list.add(new SchemaElement("Applicable OT Solution", "Define the solution applicable (OTMS/OTBE/OTMC/...)", SchemaElement.ElemType.MULTI_ENUM, "OTMS;OTBE;OTMC", 0));
 
             list.add(new SchemaElement("Models", "All model description related aspects", SchemaElement.ElemType.DOMAIN, 0));
             list.add(new SchemaElement("New models", "Do we need to create new models?", SchemaElement.ElemType.BOOLEAN, 4));
@@ -82,18 +94,14 @@ public class Init extends HttpServlet {
             list.add(new SchemaElement("cmsUser/MyProfile/quickUser affected", "Does pseudo models affected?", SchemaElement.ElemType.BOOLEAN, 0));
             list.add(new SchemaElement("Models generation affected?", "Do we need to change model generation part?", SchemaElement.ElemType.BOOLEAN, 8));
 
-            list.add(new SchemaElement("Instances", "All model instances related aspects", SchemaElement.ElemType.DOMAIN, 0));
-            list.add(new SchemaElement("New or changed instances", "Do we need to create new model instances?", SchemaElement.ElemType.BOOLEAN, 2));
-
             list.add(new SchemaElement("Translations", "All localization aspects", SchemaElement.ElemType.DOMAIN, 0));
             list.add(new SchemaElement("Models localization", "Do we need to add/change model change localization?", SchemaElement.ElemType.BOOLEAN, 2));
             list.add(new SchemaElement("Exceptions localization", "Do we need to add/change exception localization?", SchemaElement.ElemType.BOOLEAN, 2));
 
             list.add(new SchemaElement("Business logic", "All business logic aspects", SchemaElement.ElemType.DOMAIN, 0));
             list.add(new SchemaElement("Enhancer / CoherenceChecker / Post-pre actions", "Does the new Business logic affects pointed items?", SchemaElement.ElemType.BOOLEAN, 4));
-            list.add(new SchemaElement("New or changed behavior?", "Do we need to introduc/change any business logic?", SchemaElement.ElemType.BOOLEAN, 4));
-            list.add(new SchemaElement("New/changed alarams", "Do we need to create/update alarms?", SchemaElement.ElemType.BOOLEAN, 2));
-            list.add(new SchemaElement("Describe cases", "Set and describe the number of use cases/scenarios", SchemaElement.ElemType.MULTI_STRING, 4));
+            list.add(new SchemaElement("New/changed alarms", "Do we need to create/update alarms?", SchemaElement.ElemType.BOOLEAN, 2));
+            list.add(new SchemaElement("Describe cases", "Describe each business case that must be implemented", SchemaElement.ElemType.MULTI_STRING, 4));
 
             list.add(new SchemaElement("EasyAdmin / Migration / Audit", "All easy admin/migration/audit aspects", SchemaElement.ElemType.DOMAIN, 0));
             list.add(new SchemaElement("EasyAdmin", "Do we need create/update easy admin?", SchemaElement.ElemType.BOOLEAN, 2));
@@ -128,11 +136,12 @@ public class Init extends HttpServlet {
             secondList.add(new SchemaElement("FSD", "Do we need to provide contribution for the FSD?", SchemaElement.ElemType.BOOLEAN, 5));
             secondList.add(new SchemaElement("FDD", "Do we need to create/update FDD?", SchemaElement.ElemType.BOOLEAN, 5));
             secondList.add(new SchemaElement("SDD", "Do we need a dedicated component SDD or update internal docs?", SchemaElement.ElemType.BOOLEAN, 5));
-            secondList.add(new SchemaElement("Applicable otSolution", "Define the solution applicable (OTMS/OTBE/OTMC/...)", SchemaElement.ElemType.MULTI_ENUM,"OTMS;OTBE;OTMC", 0));
+            secondList.add(new SchemaElement("Applicable otSolution", "Define the solution applicable (OTMS/OTBE/OTMC/...)", SchemaElement.ElemType.MULTI_ENUM, "OTMS;OTBE;OTMC", 0));
             secondList.add(new SchemaElement("Cases", "Cases", SchemaElement.ElemType.DOMAIN, 0));
             secondList.add(new SchemaElement("Cases", "Describe your case here.", SchemaElement.ElemType.MULTI_STRING, 5));
             BaseDao.create(secondSchema);
 
+            logger.debug("Creating default folders...");
             Folder f1 = new Folder();
             f1.setName("OT10");
             Folder f2 = new Folder();
@@ -163,4 +172,41 @@ public class Init extends HttpServlet {
         UserService.createUser(user);
         return user;
     }
+
+    private void migrateDataIfNeeded() {
+        migrateSchemas();
+        logger.debug("Migrating task...");
+        if (migrateTasks()) {
+            logger.debug("Migration of task completed.");
+        } else {
+            logger.debug("Migration of task not needed.");
+        }
+    }
+
+    private void migrateSchemas() {
+        Collection<Schema> schemas = SchemaService.getNotDeprecatedSchemas();
+        if (schemas.isEmpty()) {
+            Collection<Schema> allSchemas = SchemaService.getSchemas();
+            for (Schema schema : allSchemas) {
+                schema.setDeprecated(false);
+                SchemaService.updateSchema(schema);
+            }
+        }
+    }
+
+    private boolean migrateTasks() {
+        boolean res = false;
+        List<Task> tasks = TaskService.findTasksWOStatus();
+        if (tasks != null) {
+            for (Task t : tasks) {
+                res = true;
+                logger.debug("Migrating task " + t.getName() + "...");
+                t.setStatus(Task.Status.NEW);
+                TaskService.updateTask(t);
+            }
+        }
+        return res;
+    }
+
+
 }

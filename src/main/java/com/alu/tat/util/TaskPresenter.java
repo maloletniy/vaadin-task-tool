@@ -1,12 +1,15 @@
 package com.alu.tat.util;
 
 import com.alu.tat.component.BooleanItemBean;
+import com.alu.tat.component.MultiEnumBean;
 import com.alu.tat.component.MultiStringBean;
 import com.alu.tat.entity.Task;
 import com.alu.tat.entity.schema.Schema;
 import com.alu.tat.entity.schema.SchemaElement;
 import com.alu.tat.service.SchemaService;
+import com.alu.tat.view.UIConstants;
 import com.vaadin.data.Property;
+import com.vaadin.ui.UI;
 import net.sf.json.JSON;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
@@ -24,8 +27,10 @@ public class TaskPresenter {
 
     public static String getHtmlView(Task task) {
         StringBuilder result = new StringBuilder();
-        result.append("<h1>Task: " + putString(task.getName()) + "</h1>");
+        result.append("<h2>Task: " + putString(task.getName()) + "</h2>");
         result.append("<br>");
+        String uri = getReportUrl(task);
+        result.append("<b>Direct Url:</b><a ref=\"" + uri + "\"> " + uri + "</a><br><br>");
         result.append("<b>Description:</b> " + putString(task.getDescription()));
         result.append("<br>");
         result.append("<b>Folder:</b> " + putString(task.getFolder()));
@@ -37,7 +42,7 @@ public class TaskPresenter {
         Map<String, Object> valueMap = convertFromJSON(task.getData(), schema);
         int estim = 0;
         //TODO: Very strange behavior. If you get elemList through task.schema.elemList you'll get ALL elems from all tasks
-        schema = SchemaService.getInstance().getSchema(schema.getId());
+        schema = SchemaService.getSchema(schema.getId());
         List<SchemaElement> seList = schema.getElementsList();
         for (SchemaElement se : seList) {
             if (valueMap.containsKey(se.getName())) {
@@ -75,8 +80,10 @@ public class TaskPresenter {
                     case STRING:
                         result.append("<b>" + se.getName() + ":</b> " + putString(value));
                         break;
+                    case ENUM:
                     case MULTI_ENUM: {
-                        LinkedList<String> items = (LinkedList<String>) value;
+                        MultiEnumBean bean = (MultiEnumBean) value;
+                        Collection<String> items = bean.getValue();
                         estim += se.getMultiplier();
                         StringBuilder sb = null;
                         for (String item : items) {
@@ -129,6 +136,19 @@ public class TaskPresenter {
         return result.toString();
     }
 
+    private static String getReportUrl(Task task) {
+        String uri = UI.getCurrent().getPage().getLocation().toString();
+        String suffix = UIConstants.REPORT_SHOW + task.getId();
+        String reportList = UIConstants.VIEW_REPORTLIST;
+        if (uri.contains(reportList)) {
+            uri = uri.substring(0,uri.indexOf(reportList));
+        }
+        if (!uri.contains(suffix)) {
+            uri = uri + suffix;
+        }
+        return uri;
+    }
+
     private static String putString(Object s) {
         if (s != null) {
             String st = s.toString();
@@ -153,9 +173,10 @@ public class TaskPresenter {
             switch (se.getType()) {
                 case DOMAIN:
                     break;
+                case ENUM:
                 case MULTI_ENUM: {
-                    Object value = fieldMap.get(se.getName()).getValue();
-                    Collection<String> items = (Collection<String>) value;
+                    MultiEnumBean bean = (MultiEnumBean) fieldMap.get(se.getName()).getValue();
+                    Collection<String> items = bean.getValue();
                     JSONArray ja = new JSONArray();
                     for (String item : items) {
                         ja.add(item);
@@ -220,6 +241,7 @@ public class TaskPresenter {
                     switch (se.getType()) {
                         case DOMAIN:
                             break;
+                        case ENUM:
                         case MULTI_ENUM: {
                             JSONObject jo = jso.getJSONObject(se.getName());
                             JSONArray ja = jo.getJSONArray("value");
@@ -229,7 +251,7 @@ public class TaskPresenter {
                                 String v = ja.getString(i);
                                 items.add(v);
                             }
-                            result.put(se.getName(), items);
+                            result.put(se.getName(), new MultiEnumBean(items));
                             break;
                         }
                         case MULTI_TEXT:

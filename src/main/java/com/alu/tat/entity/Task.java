@@ -1,6 +1,8 @@
 package com.alu.tat.entity;
 
 import com.alu.tat.entity.schema.Schema;
+import org.hibernate.annotations.Fetch;
+import org.hibernate.annotations.FetchMode;
 
 import javax.persistence.*;
 
@@ -19,11 +21,31 @@ import javax.persistence.*;
         @NamedQuery(
                 name = "findTaskByUser",
                 query = "from Task t where t.author = :user"
+        ),
+
+        @NamedQuery(
+                name = "findTasksWOStatus",
+                query = "from Task t where t.status is null"
         )
 })
 @Entity
 @Table(name = "task")
 public class Task extends BaseEntity {
+    public enum Status {
+        NEW("NEW"), DONE("DONE");
+
+        private String value;
+
+        Status(String value) {
+            this.value = value;
+        }
+
+        public String getValue() {
+            return value;
+        }
+    }
+
+    ;
 
     @Column(name = "name")
     private String name;
@@ -32,17 +54,24 @@ public class Task extends BaseEntity {
     private String description;
 
     @ManyToOne(fetch = FetchType.EAGER, cascade = {CascadeType.PERSIST})
+    @Fetch(FetchMode.SELECT)
     @JoinColumn(name = "user_id")
     private User author;
 
     @ManyToOne(fetch = FetchType.EAGER)
+    @Fetch(FetchMode.SELECT)
     @JoinColumn(name = "schema_id")
     private Schema schema;
+
+    @Column(name = "status")
+    @Enumerated(EnumType.STRING)
+    private Status status = Status.NEW;
 
     @Column(name = "data", columnDefinition = "TEXT")
     private String data;
 
     @ManyToOne(fetch = FetchType.EAGER, cascade = {CascadeType.PERSIST})
+    @Fetch(FetchMode.SELECT)
     @JoinColumn(name = "folder_id")
     private Folder folder;
 
@@ -86,6 +115,14 @@ public class Task extends BaseEntity {
         this.schema = schema;
     }
 
+    public Status getStatus() {
+        return status;
+    }
+
+    public void setStatus(Status status) {
+        this.status = status;
+    }
+
     public String getData() {
         return data;
     }
@@ -97,5 +134,21 @@ public class Task extends BaseEntity {
     @Override
     public String toString() {
         return name;
+    }
+
+    @Override
+    public int compareTo(Object o) {
+        return name.compareTo(((Task) o).name);
+    }
+
+    public Task copy(Task t) {
+        this.name = t.getName() + "(Copy)";
+        this.description = t.getDescription();
+        this.author = t.getAuthor();
+        this.folder = t.getFolder();
+        this.schema = t.getSchema();
+        this.status = Status.NEW;
+        this.data = t.getData();
+        return this;
     }
 }

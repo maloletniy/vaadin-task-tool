@@ -1,5 +1,6 @@
 package com.alu.tat.view;
 
+import com.alu.tat.component.VSeparator;
 import com.alu.tat.entity.schema.Schema;
 import com.alu.tat.entity.schema.SchemaElement;
 import com.alu.tat.service.SchemaService;
@@ -25,7 +26,6 @@ import java.util.List;
  */
 public class SchemaView extends AbstractActionView {
     private Navigator navigator;
-    private SchemaService schemaService = SchemaService.getInstance();
 
     @Override
     public void enter(ViewChangeListener.ViewChangeEvent event) {
@@ -35,12 +35,22 @@ public class SchemaView extends AbstractActionView {
         navigator = getUI().getNavigator();
 
         VerticalLayout form = new VerticalLayout();
-        final TextField schemaName = new TextField("Name");
+        final TextArea schemaName = new TextArea("Name");
+        schemaName.setRows(2);
         schemaName.addValidator(new StringLengthValidator(
                 "Schema name must not be empty", 1, 255, false));
         final TextArea schemaDesc = new TextArea("Description");
+        final CheckBox isDefault = new CheckBox("Is Default");
+        isDefault.setDescription("Put default if you want this Schema to be set by default for the new tasks");
+        final CheckBox isDeprecated = new CheckBox("Is Deprecated");
+        isDeprecated.setDescription("Put deprecated if you do not want this schema to be used for Task analysis");
         form.addComponent(schemaName);
         form.addComponent(schemaDesc);
+        form.addComponent(new VSeparator(20));
+        form.addComponent(isDefault);
+        form.addComponent(new VSeparator(20));
+        form.addComponent(isDeprecated);
+        form.addComponent(new VSeparator(20));
 
         final Grid grid = prepareGrid(form);
 
@@ -58,18 +68,20 @@ public class SchemaView extends AbstractActionView {
                 if (isCreate) {
                     t = new Schema();
                 } else {
-                    t = schemaService.getSchema(updateId);
+                    t = SchemaService.getSchema(updateId);
                 }
                 t.setName(schemaName.getValue());
                 t.setDescription(schemaDesc.getValue());
+                t.setIsdefault(isDefault.getValue());
+                t.setDeprecated(isDeprecated.getValue());
                 List<SchemaElement> newlist = t.getElementsList();
                 Collection<SchemaElement> cse = (Collection<SchemaElement>) grid.getContainerDataSource().getItemIds();
                 newlist.clear();
                 newlist.addAll(cse);
                 if (!isCreate) {
-                    schemaService.updateSchema(t);
+                    SchemaService.updateSchema(t);
                 } else {
-                    schemaService.addSchema(t);
+                    SchemaService.addSchema(t);
                 }
 
                 navigator.navigateTo(UIConstants.VIEW_MAIN);
@@ -88,9 +100,11 @@ public class SchemaView extends AbstractActionView {
 
         //load task fields if its for edit
         if (!isCreate) {
-            Schema schema = schemaService.getSchema(updateId);
+            Schema schema = SchemaService.getSchema(updateId);
             schemaName.setValue(schema.getName());
             schemaDesc.setValue(schema.getDescription());
+            isDefault.setValue(schema.getIsdefault() != null ? schema.getIsdefault() : false);
+            isDeprecated.setValue(schema.getDeprecated());
             for (SchemaElement se : schema.getElementsList()) {
                 grid.getContainerDataSource().addItem(se);
             }
@@ -148,7 +162,7 @@ public class SchemaView extends AbstractActionView {
     private void configureGrid(Grid grid) {
         final BeanItemContainer<SchemaElement> container = new BeanItemContainer<>(SchemaElement.class, new LinkedList<SchemaElement>());
         grid.setContainerDataSource(container);
-        grid.setColumnOrder("type", "name", "description","data");
+        grid.setColumnOrder("type", "name", "description", "data");
         grid.setEditorEnabled(true);
         grid.addItemClickListener(new SchemaElementClickListener());
         for (Grid.Column c : grid.getColumns()) {

@@ -1,5 +1,6 @@
 package com.alu.tat.view;
 
+import com.alu.tat.component.HSeparator;
 import com.alu.tat.entity.Folder;
 import com.alu.tat.entity.Task;
 import com.alu.tat.entity.User;
@@ -35,23 +36,14 @@ import java.util.Set;
  */
 public class MainView extends VerticalLayout implements View {
 
-    public static final ThemeResource FOLDER_ICON = new ThemeResource("../runo/icons/16/folder.png");
     private Navigator navigator;
-
-    private TaskService taskService = TaskService.getInstance();
-    private SchemaService schemaService = SchemaService.getInstance();
+    private PopupMenuManager popupManager;
 
     final Grid taskGrid = new Grid();
     final Panel infoPanel = new Panel("Info");
     final Tree taskTree = new Tree();
     final Tree schemaTree = new Tree();
     final Tree usersTree = new Tree();
-    final PopupMenuManager popupManager;
-
-    public MainView() {
-        super();
-        popupManager = new PopupMenuManager(this);
-    }
 
     private User getCurUser() {
         return SessionHelper.getCurrentUser(getSession());
@@ -60,6 +52,7 @@ public class MainView extends VerticalLayout implements View {
     @Override
     public void enter(ViewChangeListener.ViewChangeEvent event) {
         navigator = getUI().getNavigator();
+        popupManager = new PopupMenuManager(this);
 
         Panel rightPanel = getRightPanel();
         rightPanel.setSizeFull();
@@ -67,10 +60,9 @@ public class MainView extends VerticalLayout implements View {
         Panel leftPanel = getLeftPanel(getCurUser().getIsSystem());
         leftPanel.setSizeFull();
 
-        HorizontalLayout container = new HorizontalLayout(leftPanel, rightPanel);
-
-        container.setExpandRatio(leftPanel, 1);
-        container.setExpandRatio(rightPanel, 4);
+        final HorizontalSplitPanel container = new HorizontalSplitPanel(leftPanel, rightPanel);
+        // Set the position of the splitter as percentage
+        container.setSplitPosition(25, Unit.PERCENTAGE);
         container.setSizeFull();
 
         addComponent(container);
@@ -81,7 +73,7 @@ public class MainView extends VerticalLayout implements View {
     private Component getTasksTreeMenu() {
         Layout container = new VerticalLayout();
 
-        configureTaskTree(taskTree, infoPanel);
+        configureTaskTree(taskTree);
 
         container.addComponent(taskTree);
 
@@ -116,32 +108,34 @@ public class MainView extends VerticalLayout implements View {
         tabsheet.addTab(new VerticalLayout());
         if (!isSystemUser) {
             schemas.setVisible(false);
-            users.setVisible(false);
+            //users.setVisible(false);
         }
 
         Panel p = new Panel();
         HorizontalLayout panelCaption = new HorizontalLayout();
         panelCaption.setStyleName("panelstyle");
         panelCaption.setWidth(100, Unit.PERCENTAGE);
-        Label menuLab = new Label("Menu");
-        panelCaption.addComponent(menuLab);
-        panelCaption.setComponentAlignment(menuLab, Alignment.TOP_LEFT);
+
         Button signout = UIComponentFactory.getButton("Sign Out", "MAINVIEW_SIGNOUT_BUTTON");
+
         signout.addClickListener(new Button.ClickListener() {
             @Override
             public void buttonClick(Button.ClickEvent event) {
-                // "Logout" the user
-                getSession().setAttribute("user", null);
+                // Close the VaadinServiceSession
+                getUI().getSession().close();
 
-                // Refresh this view, should redirect to login view
-                navigator.navigateTo("");
+                // Redirect to the rool app location to avoid UI freeze
+                String path = getUI().getPage().getLocation().getPath();
+                getUI().getPage().setLocation(path);
             }
         });
+
         panelCaption.addComponent(signout);
         panelCaption.setComponentAlignment(signout, Alignment.TOP_RIGHT);
         panelCaption.setHeight(signout.getHeight(), signout.getHeightUnits());
         VerticalLayout v = new VerticalLayout();
         v.setMargin(true);
+        v.setSpacing(true);
         v.addComponent(panelCaption);
         v.addComponent(tabsheet);
         v.setExpandRatio(tabsheet, 1);
@@ -159,9 +153,12 @@ public class MainView extends VerticalLayout implements View {
 
         final Button createButton = UIComponentFactory.getButton("Create task", "MAINVIEW_CREATE_TASK_BUTTON");
         final Button deleteTaskButton = UIComponentFactory.getButton("Delete task", "MAINVIEW_DEL_TASK_BUTTON");
+        deleteTaskButton.setEnabled(false);
 
         buttonPanel.addComponent(createButton);
+        buttonPanel.addComponent(new HSeparator(20));
         buttonPanel.addComponent(deleteTaskButton);
+        buttonPanel.setComponentAlignment(createButton, Alignment.TOP_LEFT);
         buttonPanel.setComponentAlignment(deleteTaskButton, Alignment.TOP_RIGHT);
 
 
@@ -169,9 +166,9 @@ public class MainView extends VerticalLayout implements View {
         container.addComponent(taskGrid);
         container.addComponent(infoPanel);
 
-        container.setExpandRatio(buttonPanel, 2);
-        container.setExpandRatio(taskGrid, 4);
-        container.setExpandRatio(infoPanel, 2);
+        container.setExpandRatio(buttonPanel, 1);
+        container.setExpandRatio(taskGrid, 12);
+        container.setExpandRatio(infoPanel, 8);
 
         taskGrid.addSelectionListener(new SelectionEvent.SelectionListener() {
             @Override
@@ -196,28 +193,32 @@ public class MainView extends VerticalLayout implements View {
             @Override
             public void buttonClick(Button.ClickEvent event) {
                 Task t = (Task) taskGrid.getSelectedRow();
-                taskService.removeTask(t.getId());
-                navigator.navigateTo(UIConstants.VIEW_MAIN);
+                if (t != null) {
+                    TaskService.removeTask(t.getId());
+                    navigator.navigateTo(UIConstants.VIEW_MAIN);
+                }
             }
         });
 
-        return new Panel("Content", container);
+        container.setMargin(true);
+        container.setSpacing(true);
+        return new Panel(container);
     }
 
-    private void configureTaskTree(Tree tree, Panel infoPanel) {
-        final Collection<Task> tasks = taskService.getTasks();
+    private void configureTaskTree(Tree tree) {
+        final Collection<Task> tasks = TaskService.getTasks();
 
-        String root = "Category";
+        String root = "Folder";
 
         tree.addItem(root);
         tree.expandItem(root);
-        tree.setItemIcon(root, FOLDER_ICON);
+        tree.setItemIcon(root, UIConstants.FOLDER_ICON);
 
         Set<Folder> foldersSet = new LinkedHashSet<>(FolderService.getFolders());
         //At first add all sub-nodes
         for (Folder r : foldersSet) {
             Item i = tree.addItem(r);
-            tree.setItemIcon(r, FOLDER_ICON);
+            tree.setItemIcon(r, UIConstants.FOLDER_ICON);
         }
         //After we can setup the roots
         for (Folder r : foldersSet) {
@@ -245,12 +246,12 @@ public class MainView extends VerticalLayout implements View {
     }
 
     private void configureSchemaTree(Tree tree, Panel infoPanel) {
-        final Collection<Schema> schemas = schemaService.getSchemas();
+        final Collection<Schema> schemas = SchemaService.getSchemas();
 
         String root = "Schemas";
 
         tree.addItem(root);
-        tree.setItemIcon(root, FOLDER_ICON);
+        tree.setItemIcon(root, UIConstants.FOLDER_ICON);
         tree.expandItem(root);
 
         for (Schema t : schemas) {
@@ -269,13 +270,15 @@ public class MainView extends VerticalLayout implements View {
         String root = "Users";
 
         tree.addItem(root);
-        tree.setItemIcon(root, FOLDER_ICON);
+        tree.setItemIcon(root, UIConstants.FOLDER_ICON);
         tree.expandItem(root);
 
         for (User t : users) {
-            tree.addItem(t);
-            tree.setParent(t, root);
-            tree.setChildrenAllowed(t, false);
+            if (getCurUser().getIsSystem() || t.equals(getCurUser())) {
+                tree.addItem(t);
+                tree.setParent(t, root);
+                tree.setChildrenAllowed(t, false);
+            }
         }
 
         tree.addItemClickListener(new UserTreeItemClickListener());
@@ -283,7 +286,7 @@ public class MainView extends VerticalLayout implements View {
     }
 
     private void configureGrid(Grid grid, final Panel infoPanel) {
-        final Collection<Task> tasks = taskService.getTasks();
+        final Collection<Task> tasks = TaskService.getTasks();
 
         grid.setSizeFull();
         final BeanItemContainer<Task> container = new BeanItemContainer<>(Task.class, tasks);
@@ -298,7 +301,7 @@ public class MainView extends VerticalLayout implements View {
 
         grid.addItemClickListener(new TastItemGridClickListener());
 
-
+        infoPanel.setSizeFull();
     }
 
 
@@ -314,17 +317,20 @@ public class MainView extends VerticalLayout implements View {
                     if (event.getButton() == MouseEventDetails.MouseButton.RIGHT) {
                         popupManager.showWindow(event.getClientX(), event.getClientY(), new TaskPopupMenu(task));
                     } else {
-                        RichTextArea text = new RichTextArea();
-                        text.setSizeFull();
-                        text.setValue(TaskPresenter.getHtmlView(task));
-                        text.setReadOnly(true);
-
-                        infoPanel.setSizeFull();
-                        infoPanel.setContent(text);
+                        showTaskInfo(task);
                     }
                 }
             }
         }
+    }
+
+    private void showTaskInfo(Task task) {
+        String s = TaskPresenter.getHtmlView(task);
+        RichTextArea text = new RichTextArea();
+        text.setSizeFull();
+        text.setValue(s);
+        text.setReadOnly(true);
+        infoPanel.setContent(text);
     }
 
     private class TaskTreeItemClickListener implements ItemClickEvent.ItemClickListener {
@@ -337,7 +343,7 @@ public class MainView extends VerticalLayout implements View {
                     getUI().getCurrent().getSession().setAttribute("selectedFolder", null);
                     popupManager.showWindow(event.getClientX(), event.getClientY(), new FolderPopupMenu(null));
                 } else {
-                    Collection<Task> tasks = taskService.getTasks();
+                    Collection<Task> tasks = TaskService.getTasks();
                     final BeanItemContainer<Task> container = new BeanItemContainer<>(Task.class, tasks);
                     taskGrid.setContainerDataSource(container);
                     taskGrid.markAsDirty();
@@ -350,7 +356,7 @@ public class MainView extends VerticalLayout implements View {
                     getUI().getCurrent().getSession().setAttribute("selectedFolder", folder);
                     popupManager.showWindow(event.getClientX(), event.getClientY(), new FolderPopupMenu(folder));
                 } else {
-                    List<Task> tasks = taskService.findTaskByFolder(folder);
+                    List<Task> tasks = TaskService.findTaskByFolder(folder);
                     final BeanItemContainer<Task> container = new BeanItemContainer<>(Task.class, tasks);
                     taskGrid.setContainerDataSource(container);
                     taskGrid.markAsDirty();
@@ -365,13 +371,7 @@ public class MainView extends VerticalLayout implements View {
                     if (event.getButton() == MouseEventDetails.MouseButton.RIGHT) {
                         popupManager.showWindow(event.getClientX(), event.getClientY(), new TaskPopupMenu(task));
                     } else {
-                        RichTextArea text = new RichTextArea();
-                        text.setSizeFull();
-                        text.setValue(TaskPresenter.getHtmlView(task));
-                        text.setReadOnly(true);
-
-                        infoPanel.setSizeFull();
-                        infoPanel.setContent(text);
+                        showTaskInfo(task);
                     }
                 }
             }
@@ -386,7 +386,7 @@ public class MainView extends VerticalLayout implements View {
                 if (event.getButton() == MouseEventDetails.MouseButton.RIGHT) {
                     popupManager.showWindow(event.getClientX(), event.getClientY(), new SchemaPopupMenu(null));
                 } else {
-                    Collection<Task> tasks = taskService.getTasks();
+                    Collection<Task> tasks = TaskService.getTasks();
                     final BeanItemContainer<Task> container = new BeanItemContainer<>(Task.class, tasks);
                     taskGrid.setContainerDataSource(container);
                     taskGrid.markAsDirty();
@@ -400,7 +400,7 @@ public class MainView extends VerticalLayout implements View {
                     if (event.getButton() == MouseEventDetails.MouseButton.RIGHT) {
                         popupManager.showWindow(event.getClientX(), event.getClientY(), new SchemaPopupMenu(schema));
                     } else {
-                        List<Task> tasks = taskService.findTaskBySchema(schema);
+                        List<Task> tasks = TaskService.findTaskBySchema(schema);
                         final BeanItemContainer<Task> container = new BeanItemContainer<>(Task.class, tasks);
                         taskGrid.setContainerDataSource(container);
                         taskGrid.markAsDirty();
@@ -410,7 +410,6 @@ public class MainView extends VerticalLayout implements View {
                         text.setValue(SchemaPresenter.getHtmlView(schema));
                         text.setReadOnly(true);
 
-                        infoPanel.setSizeFull();
                         infoPanel.setContent(text);
                     }
                 }
@@ -424,9 +423,9 @@ public class MainView extends VerticalLayout implements View {
         public void itemClick(ItemClickEvent event) {
             if (event.getItemId() instanceof String) {
                 if (event.getButton() == MouseEventDetails.MouseButton.RIGHT) {
-                    popupManager.showWindow(event.getClientX(), event.getClientY(), new UserPopupMenu(null));
+                    popupManager.showWindow(event.getClientX(), event.getClientY(), new UserPopupMenu(null, getSession()));
                 } else {
-                    Collection<Task> tasks = taskService.getTasks();
+                    Collection<Task> tasks = TaskService.getTasks();
                     final BeanItemContainer<Task> container = new BeanItemContainer<>(Task.class, tasks);
                     taskGrid.setContainerDataSource(container);
                     taskGrid.markAsDirty();
@@ -437,9 +436,9 @@ public class MainView extends VerticalLayout implements View {
                     navigator.navigateTo(UIConstants.USER_UPDATE + user.getId());
                 } else {
                     if (event.getButton() == MouseEventDetails.MouseButton.RIGHT) {
-                        popupManager.showWindow(event.getClientX(), event.getClientY(), new UserPopupMenu(user));
+                        popupManager.showWindow(event.getClientX(), event.getClientY(), new UserPopupMenu(user, getSession()));
                     } else {
-                        List<Task> tasks = taskService.findTaskByUser(user);
+                        List<Task> tasks = TaskService.findTaskByUser(user);
                         final BeanItemContainer<Task> container = new BeanItemContainer<>(Task.class, tasks);
                         taskGrid.setContainerDataSource(container);
                         taskGrid.markAsDirty();
